@@ -6,8 +6,8 @@ const db = process.env.DATABASEURL;
 const databaseConnection = () => {
   mongoose
     .connect(db, {
-      useNewUrlParser: true,
-      useUnifiedTopology: true,
+      // useNewUrlParser: true,
+      // useUnifiedTopology: true,
     })
     .then(() => {
       console.log("database connection established");

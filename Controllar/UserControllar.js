@@ -4,6 +4,8 @@ const OTPSchema = require("../Model/OTPSchema");
 const nodemailer = require("nodemailer");
 const bcrypt = require("bcrypt");
 const jwt = require("jsonwebtoken");
+const path = require("path");
+const fs = require("fs").promises;
 
 //generate a random number for otp
 const GenerateOTP = () => {
@@ -186,27 +188,32 @@ exports.registerAccount = async (req, res) => {
   }
 };
 
-//login user
+// Login user
 exports.login = async (req, res) => {
   try {
     console.log("login route hit");
-    const { email, password } = req.body;
+    const { email, password, latitude, longitude } = req.body;
+
     if (isEmptyOrSpaces(email) || isEmptyOrSpaces(password)) {
       return res.status(400).json({
         status: "failed",
         message: "email or password must not be empty or spaces",
       });
     }
+
     checkEmailFormat(email);
+
     const user = await User.findOne({ email: email });
     console.log("user ========>", user);
+
     if (!user) {
       return res.status(404).json({
         status: "failed",
         message: "User not found",
       });
     }
-    bcrypt.compare(password, user.password, (err, result) => {
+
+    bcrypt.compare(password, user.password, async (err, result) => {
       if (err) {
         console.log("error=====>", err);
         return res.status(500).json({
@@ -214,8 +221,28 @@ exports.login = async (req, res) => {
           message: err.message,
         });
       }
+
       if (result) {
-        // console.log("result ====>", result);
+        // Update user location if latitude and longitude are provided
+        if (latitude && longitude) {
+          const lat = parseFloat(latitude);
+          const long = parseFloat(longitude);
+
+          if (!isNaN(lat) && !isNaN(long)) {
+            user.location = {
+              type: "Point",
+              coordinates: [long, lat],
+            };
+            await user.save();
+          } else {
+            return res.status(400).json({
+              status: "failed",
+              message:
+                "Invalid location data. Latitude and longitude must be numbers.",
+            });
+          }
+        }
+
         const token = jwt.sign(
           { id: user._id, email: user.email },
           process.env.SCRATEKEY,
@@ -246,6 +273,66 @@ exports.login = async (req, res) => {
     });
   }
 };
+
+// //login user
+// exports.login = async (req, res) => {
+//   try {
+//     console.log("login route hit");
+//     const { email, password, latitude, longitude } = req.body;
+//     if (isEmptyOrSpaces(email) || isEmptyOrSpaces(password)) {
+//       return res.status(400).json({
+//         status: "failed",
+//         message: "email or password must not be empty or spaces",
+//       });
+//     }
+//     checkEmailFormat(email);
+//     const user = await User.findOne({ email: email });
+//     console.log("user ========>", user);
+//     if (!user) {
+//       return res.status(404).json({
+//         status: "failed",
+//         message: "User not found",
+//       });
+//     }
+//     bcrypt.compare(password, user.password, (err, result) => {
+//       if (err) {
+//         console.log("error=====>", err);
+//         return res.status(500).json({
+//           status: "failed",
+//           message: err.message,
+//         });
+//       }
+//       if (result) {
+//         const token = jwt.sign(
+//           { id: user._id, email: user.email },
+//           process.env.SCRATEKEY,
+//           {
+//             expiresIn: "24h",
+//           }
+//         );
+//         return res.status(200).json({
+//           status: "success",
+//           message: "login successfully",
+//           data: {
+//             user: user,
+//             token: token,
+//           },
+//         });
+//       } else {
+//         return res.status(404).json({
+//           status: "failed",
+//           message: "password does not match",
+//         });
+//       }
+//     });
+//   } catch (err) {
+//     console.log("error waqas =====>", err);
+//     return res.status(500).json({
+//       status: "failed",
+//       message: err.message,
+//     });
+//   }
+// };
 
 //forgetPassword
 exports.forgetPassword = async (req, res, next) => {
@@ -383,5 +470,109 @@ exports.setNewPassword = async (req, res) => {
   } catch (err) {
     console.log("error====>", err);
     return res.status(500).json({ message: err.message });
+  }
+};
+
+//editProfile
+exports.editProfile = async (req, res) => {
+  try {
+    const userId = req.user.id;
+    console.log("useer====> ", userId);
+    let { firstname, lastname } = req.body;
+    if (!(firstname && lastname)) {
+      return res.status(400).json({
+        status: "failed",
+        message: "firstname or lastname missing",
+      });
+    }
+    firstname = firstname.trim();
+    lastname = lastname.trim();
+    if (isEmptyOrSpaces(firstname) || isEmptyOrSpaces(lastname)) {
+      return res.status(400).json({
+        status: "failed",
+        message: "firstname or lastname is empty or spaces",
+      });
+    }
+    const user = await User.findById(userId);
+    if (!user) {
+      return res.status(404).json({
+        status: "failed",
+        message: "User does not exist",
+      });
+    }
+    const updatedUser = await User.findByIdAndUpdate(
+      userId,
+      { firstname, lastname },
+      { new: true }
+    );
+    if (!updatedUser) {
+      return res.status(404).json({
+        status: "error",
+        message: "User not found",
+      });
+    }
+    return res.status(200).json({
+      status: "success",
+      data: updatedUser,
+    });
+  } catch (err) {
+    console.error(err);
+    return res.status(500).json({
+      status: "failed",
+      message: err.message,
+    });
+  }
+};
+
+// update profile image
+exports.updateUserProfileImage = async (req, res) => {
+  try {
+    const userId = req.user.id;
+    const user = await User.findById(userId);
+    if (!user) {
+      return res.status(404).json({
+        status: "failed",
+        message: "User not found",
+      });
+    }
+    if (!req.file) {
+      return res.status(400).json({
+        status: "failed",
+        message: "No image file uploaded",
+      });
+    }
+    if (userId !== req.user.id) {
+      return res.status(401).json({
+        status: "error",
+        message: "Unauthorized access to update profile image",
+      });
+    }
+    const previousImagePath = user.profileImage;
+    if (previousImagePath) {
+      const fullPath = path.join(__dirname, "..", previousImagePath);
+      try {
+        await fs.access(fullPath); // Check if file exist
+        await fs.unlink(fullPath); // Delete the file
+        console.log("Previous profile image deleted:", fullPath);
+      } catch (error) {
+        console.error("Error deleting previous profile image:", error);
+      }
+    }
+    console.log("path=======>", path.normalize(req.file.path));
+    const normalizedImagePath = req.file.path.replace(/\\/g, "/");
+    user.profileImage = normalizedImagePath;
+    const updatedUser = await user.save();
+    console.log("updatedUser======>", updatedUser);
+
+    return res.status(200).json({
+      status: "success",
+      data: updatedUser,
+    });
+  } catch (error) {
+    console.error("Error updating user profile image:", error);
+    return res.status(500).json({
+      status: "error",
+      message: "Failed to update user profile image",
+    });
   }
 };

@@ -10,5 +10,22 @@ app.listen(process.env.PORT, () => {
   console.log("server is listning on port 5000");
 });
 
-const userRoute = require("./Routes/userRoute");
-app.use("/api/v1", userRoute);
+//user
+const userRoutes = require("./Routes/userRoute");
+app.use("/api/v1", userRoutes);
+
+//facilites
+const facilitiesRoutes = require("./Routes/facilitiesRoute");
+app.use("/api/v1", facilitiesRoutes);
+
+//nearby places
+const nearbyPlacesRoutes = require("./Routes/PlaceRoute");
+app.use("/api/v1", nearbyPlacesRoutes);
+
+//places type
+const placeTypeRoute = require("./Routes/placeTypeRoute");
+app.use("/api/v1", placeTypeRoute);
+
+//post
+const postRoutes = require("./Routes/PostRoutes");
+app.use("/api/v1", postRoutes);

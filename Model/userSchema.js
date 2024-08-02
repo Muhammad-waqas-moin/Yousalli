@@ -24,9 +24,11 @@ const UserSchema = mongoose.Schema({
     required: false,
     default: "", // Initially empty
   },
-  //   phone: {
-  //     type: String,
-  //   },
+  location: {
+    type: { type: String, enum: ["Point"], default: "Point" },
+    coordinates: { type: [Number], default: [0, 0] },
+  },
+
   createdAt: {
     type: Date,
     default: Date.now,
